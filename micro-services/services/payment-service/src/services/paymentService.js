@@ -28,7 +28,24 @@ class PaymentService {
       status: 'PENDING'
     });
 
-    return payment;
+    const merchantId = process.env.PAYHERE_MERCHANT_ID || '1221190';
+    const merchantSecret = process.env.PAYHERE_SECRET || '';
+    const currency = 'LKR';
+    const formattedAmount = parseFloat(amount).toLocaleString('en-us', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,/g, '');
+    
+    // Generate PayHere Hash
+    // md5sig = md5(merchant_id + order_id + payhere_amount + payhere_currency + status_code + uppercase_md5(merchant_secret)) for verification
+    // For init: md5(merchant_id + order_id + amount + currency + uppercase_md5(merchant_secret))
+    const hashedSecret = crypto.createHash('md5').update(merchantSecret).digest('hex').toUpperCase();
+    const hash = crypto.createHash('md5')
+      .update(merchantId + orderId + formattedAmount + currency + hashedSecret)
+      .digest('hex').toUpperCase();
+
+    const paymentObj = payment.toObject();
+    paymentObj.payhereHash = hash;
+    paymentObj.merchantId = merchantId;
+
+    return paymentObj;
   }
 
   // ─── Confirm Payment (Simulated Gateway) ─────────────────
@@ -42,33 +59,53 @@ class PaymentService {
       throw new ApiError(409, 'Payment already confirmed.');
     }
 
-    // Simulate gateway — 90% success rate
-    const success = this._mockPaymentGateway(payment.method, payment.amount);
+    const transactionId = crypto.randomBytes(16).toString('hex');
+    payment.status = 'SUCCESS';
+    payment.transactionId = transactionId;
+    payment.paidAt = new Date();
+    payment.invoiceNumber = `INV-${Date.now()}`;
+    await payment.save();
 
-    if (success) {
-      const transactionId = crypto.randomBytes(16).toString('hex');
-      payment.status = 'SUCCESS';
-      payment.transactionId = transactionId;
-      payment.paidAt = new Date();
-      payment.invoiceNumber = `INV-${Date.now()}`;
-      await payment.save();
-
-      // Inter-service call: update appointment to PAID + CONFIRMED
-      const updated = await appointmentClient.updateAppointmentPaymentStatus(
-        payment.appointmentId, 'PAID'
-      );
-      if (!updated) {
-        console.error(`Warning: Failed to update appointment status for ${payment.appointmentId}`);
-      }
-    } else {
-      payment.status = 'FAILED';
-      payment.failureReason = 'Simulated gateway declined the transaction.';
-      await payment.save();
-
-      throw new ApiError(400, 'Payment failed. Please try another method.');
+    // Inter-service call: update appointment to PAID + CONFIRMED
+    const updated = await appointmentClient.updateAppointmentPaymentStatus(
+      payment.appointmentId, 'PAID'
+    );
+    if (!updated) {
+      console.error(`Warning: Failed to update appointment status for ${payment.appointmentId}`);
     }
 
     return payment;
+  }
+
+  // ─── PayHere Webhook Notify ──────────────────────────────
+  async handlePayHereNotify(payload) {
+    const {
+      merchant_id,
+      order_id,
+      payhere_amount,
+      payhere_currency,
+      status_code,
+      md5sig
+    } = payload;
+
+    const merchantSecret = process.env.PAYHERE_SECRET || '';
+    const hashedSecret = crypto.createHash('md5').update(merchantSecret).digest('hex').toUpperCase();
+    const localSig = crypto.createHash('md5')
+      .update(merchant_id + order_id + payhere_amount + payhere_currency + status_code + hashedSecret)
+      .digest('hex').toUpperCase();
+
+    if (localSig === md5sig) {
+      if (status_code === '2') {
+        // Only confirm if it's not already confirmed
+        const payment = await Payment.findOne({ orderId: order_id });
+        if (payment && payment.status !== 'SUCCESS') {
+           await this.confirmPayment(order_id);
+        }
+      }
+      return true;
+    }
+    
+    return false;
   }
 
   // ─── Get Payments (List) ─────────────────────────────────
@@ -164,11 +201,6 @@ class PaymentService {
     doc.end();
   }
 
-  // ─── Mock Gateway ────────────────────────────────────────
-  _mockPaymentGateway(method, amount) {
-    if (amount <= 0) return false;
-    return Math.random() > 0.1; // 90% success
   }
-}
 
 module.exports = new PaymentService();

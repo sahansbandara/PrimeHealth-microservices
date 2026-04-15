@@ -6,6 +6,18 @@ const { parseAuthHeaders, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * /api/payments/payhere/notify:
+ *   post:
+ *     summary: Webhook for PayHere Sandbox
+ *     tags: [Payments]
+ *     responses:
+ *       200:
+ *         description: OK
+ */
+router.post('/payhere/notify', paymentController.payhereNotify);
+
 router.use(parseAuthHeaders);
 
 /**

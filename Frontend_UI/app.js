@@ -120,31 +120,72 @@ async function processPaymentFlow(appointmentId, patientId, doctorId, amount) {
       return;
     }
 
-    const orderId = initData.data.orderId;
-    showMessage('payment-message', `📦 Order ${orderId} created. Confirming payment...`, 'info');
+    const { orderId, payhereHash, merchantId } = initData.data;
 
-    // Step 2: Confirm (after small delay to simulate gateway)
-    await new Promise(r => setTimeout(r, 1500));
+    // Define PayHere Callbacks
+    payhere.onCompleted = async function onCompleted(orderIdCallback) {
+        showMessage('payment-message', `📦 Payment captured. Confirming...`, 'info');
+        
+        // Since localhost webhooks fail, manually trigger /confirm from frontend side
+        try {
+            const confirmRes = await fetch(`${PAYMENT_URL}/confirm`, {
+                method: 'POST',
+                headers: AUTH_HEADERS,
+                body: JSON.stringify({ orderId })
+            });
+            const confirmData = await confirmRes.json();
+            
+            if (confirmData.success) {
+                showMessage('payment-message', `🎉 Payment successful! Appointment CONFIRMED.`, 'success');
+                payBtn.textContent = '✅ Paid';
+            } else {
+                showMessage('payment-message', `❌ ${confirmData.message}`, 'error');
+                payBtn.disabled = false;
+                payBtn.textContent = '💰 Retry Payment';
+            }
+        } catch (e) {
+            showMessage('payment-message', `⚠️ Confirmed by PayHere, but frontend failed to notify backend.`, 'error');
+        }
+    };
 
-    const confirmRes = await fetch(`${PAYMENT_URL}/confirm`, {
-      method: 'POST',
-      headers: AUTH_HEADERS,
-      body: JSON.stringify({ orderId })
-    });
-    const confirmData = await confirmRes.json();
+    payhere.onDismissed = function onDismissed() {
+        showMessage('payment-message', `Payment dismissed.`, 'info');
+        payBtn.disabled = false;
+        payBtn.textContent = '💰 Pay Now';
+    };
 
-    if (confirmData.success) {
-      showMessage('payment-message',
-        `🎉 Payment successful! Transaction: ${confirmData.data.transactionId}. Appointment CONFIRMED.`, 'success'
-      );
-      payBtn.textContent = '✅ Paid';
-    } else {
-      showMessage('payment-message', `❌ ${confirmData.message || 'Payment failed'}`, 'error');
-      payBtn.disabled = false;
-      payBtn.textContent = '💰 Retry Payment';
-    }
+    payhere.onError = function onError(error) {
+        showMessage('payment-message', `❌ PayHere Error: ${error}`, 'error');
+        payBtn.disabled = false;
+        payBtn.textContent = '💰 Pay Now';
+    };
+
+    // Construct PayHere Object
+    const payment = {
+        "sandbox": true,
+        "merchant_id": merchantId, 
+        "return_url": window.location.href, // Return URL is only for full page redirs
+        "cancel_url": window.location.href,
+        "notify_url": "http://your-ngrok-url/api/payments/payhere/notify", // Webhook target
+        "order_id": orderId,
+        "items": "Doctor Appointment Consultation",
+        "amount": parseFloat(amount).toFixed(2),
+        "currency": "LKR",
+        "hash": payhereHash, 
+        "first_name": "Test", // Ideally fetch from patient details
+        "last_name": "Patient",
+        "email": "sahan@exmaple.com",
+        "phone": "0771234567",
+        "address": "No.1, Galle Road",
+        "city": "Colombo",
+        "country": "Sri Lanka"
+    };
+
+    // Show PayHere Modal
+    payhere.startPayment(payment);
+
   } catch (err) {
-    showMessage('payment-message', `❌ Could not connect to Payment Service (is it running on :5004?)`, 'error');
+    showMessage('payment-message', `❌ Could not connect to Payment Service`, 'error');
     payBtn.disabled = false;
     payBtn.textContent = '💰 Pay Now';
   }

@@ -38,6 +38,22 @@ class PaymentController {
     }
   }
 
+  // POST /api/payments/payhere/notify
+  async payhereNotify(req, res, next) {
+    try {
+      const isValid = await paymentService.handlePayHereNotify(req.body);
+      if (isValid) {
+        res.status(200).send('OK');
+      } else {
+        res.status(400).send('Invalid signature');
+      }
+    } catch (error) {
+      // PayHere expects a 200 response to avoid retries if the format was received
+      console.error('PayHere Webhook Error:', error);
+      res.status(200).send('Internal Error Processed');
+    }
+  }
+
   // GET /api/payments  &  GET /api/payments/my
   async getPayments(req, res, next) {
     try {
