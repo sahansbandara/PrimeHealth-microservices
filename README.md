@@ -71,6 +71,9 @@ graph TD
 
 ### Option A — Run Individually (Local Dev)
 
+> **Important**: Before running, you must create `.env` files for each service.
+> Copy the provided `.env.example` to `.env` and fill in any required credentials (like PayHere secrets or Mongo URIs).
+
 ```bash
 # Terminal 1 — Appointment Service
 cd micro-services/services/appointment-service
