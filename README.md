@@ -73,6 +73,7 @@ graph TD
 
 > **Important**: Before running, you must create `.env` files for each service.
 > Copy the provided `.env.example` to `.env` and fill in any required credentials (like PayHere secrets or Mongo URIs).
+> *For Payment Service:* Ensure `PAYHERE_MERCHANT_ID` and `PAYHERE_MERCHANT_SECRET` are properly set for the sandbox gateway connections.
 
 ```bash
 # Terminal 1 — Appointment Service

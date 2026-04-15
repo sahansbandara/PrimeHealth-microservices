@@ -83,9 +83,11 @@ MONGO_URI=mongodb://localhost:27017/primehealth_payment
 LOG_LEVEL=debug
 CORS_ORIGIN=*
 APPOINTMENT_SERVICE_URL=http://localhost:5003
+PAYHERE_MERCHANT_ID=1228221
+PAYHERE_MERCHANT_SECRET=NDQ3MzIyNDgzMDI0NzQxNzU2OTAxNDA4NzkxODA2NTM5NDQxOTA=
 ```
 
-> **Setup:** Copy `.env.example` → `.env` in each service folder, then update `MONGO_URI` with your connection string.
+> **Setup:** Copy `.env.example` → `.env` in each service folder, then update `MONGO_URI` with your connection string. Make sure the `PAYHERE_` keys match your actual sandbox credentials if running real transactions.
 
 ---
 

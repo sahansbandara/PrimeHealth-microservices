@@ -76,6 +76,7 @@
 - Implemented robust `initiatePayment` logic ensuring payload checksum hashing mirrors production PayHere expectations.
 - Added a 25-second frontend fallback watcher/timeout routine ensuring users are given an auto-confirmed receipt even if the PayHere API webhooks fail to successfully connect backend-to-backend.
 - Upgraded the Architectural and Sequence text blocks to beautifully rendered Mermaid Diagrams across both `.md` documentation modules (`Sithmi_Guide.md` and `README.md`).
+- Corrected `.env` structures in the documentation (`README.md` and `Sithmi_Guide.md`) to reflect properly setting up `PAYHERE_MERCHANT_ID` and `PAYHERE_MERCHANT_SECRET` sandbox credentials.
 
 **Current state**:
 - Branch: main
