@@ -91,17 +91,29 @@ APPOINTMENT_SERVICE_URL=http://localhost:5003
 
 ## 🏗 Architecture
 
+```mermaid
+graph TD
+    UI[Frontend UI] -->|Book Appt| AS[Appointment Svc :5003]
+    UI -->|Initiate/Confirm| PS[Payment Svc :5004]
+    UI -.->|Checkout| PH[PayHere Sandbox]
+    PH -.->|Webhook Notify| PS
+    PS -->|Fetch/Validate| DS[Doctor Svc :5002]
+    PS -->|Update Status| AS
+    
+    AS -->|Read/Write| MDBA[(MongoDB : Appt)]
+    PS -->|Read/Write| MDBP[(MongoDB : Pay)]
+    
+    classDef client fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    classDef service fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef db fill:#bfb,stroke:#333,stroke-width:2px;
+    classDef external fill:#fbb,stroke:#333,stroke-width:2px;
+    
+    class UI client;
+    class AS,PS,DS service;
+    class MDBA,MDBP db;
+    class PH external;
 ```
-┌────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│  Frontend UI   │────▶│ Appointment Svc  │◀───▶│  Payment Svc     │
-│  (HTML/JS)     │     │  :5003           │     │  :5004           │
-└────────────────┘     └─────────┬────────┘     └─────────┬────────┘
-                                 │                        │
-                       ┌─────────▼────────┐     ┌─────────▼────────┐
-                       │  MongoDB         │     │  MongoDB         │
-                       │  (appointments)  │     │  (payments)      │
-                       └──────────────────┘     └──────────────────┘
-```
+
 
 ### Inter-Service Communication
 - **Payment → Appointment:** When payment is confirmed (`SUCCESS`), the Payment Service calls  
@@ -473,6 +485,28 @@ curl http://localhost:5004/api/payments?patientId=p-123 \
 5. **Queue System** — Queue numbers are assigned per-doctor per-day. `getQueuePosition()` calculates live position by counting active appointments with lower queue numbers.
 
 6. **PDF Invoices** — Generated on-the-fly using `pdfkit` and streamed directly to the browser (no file saved on server).
+
+### Payment Flow Sequence
+
+```mermaid
+sequenceDiagram
+    participant P as Patient (Frontend)
+    participant A as Appointment Svc
+    participant Pay as Payment Svc
+    participant PH as PayHere Sandbox
+
+    P->>A: POST /appointments (Book)
+    A-->>P: 201 Created (appointmentId)
+    P->>Pay: POST /payments/initiate
+    Pay-->>P: 201 Created (orderId, hash, merchantId)
+    P->>PH: startPayment(merchantId, hash, orderId)
+    PH-->>P: onCompleted() or 25s Fallback Timeout
+    PH--xPay: [Webhook] POST /payhere/notify (Background)
+    P->>Pay: POST /payments/confirm (Safety Fallback)
+    Pay->>A: PATCH /appointments/:id/payment-status (PAID)
+    Pay-->>P: 200 OK (Payment Verified)
+    P->>Pay: GET invoice (Download PDF)
+```
 
 ---
 

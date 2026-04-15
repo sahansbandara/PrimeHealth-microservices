@@ -122,8 +122,11 @@ async function processPaymentFlow(appointmentId, patientId, doctorId, amount) {
 
     const { orderId, payhereHash, merchantId } = initData.data;
 
+    let fallbackWatcher;
+
     // Define PayHere Callbacks
     payhere.onCompleted = async function onCompleted(orderIdCallback) {
+        clearTimeout(fallbackWatcher);
         showMessage('payment-message', `📦 Payment captured. Confirming...`, 'info');
         
         // Since localhost webhooks fail, manually trigger /confirm from frontend side
@@ -138,6 +141,8 @@ async function processPaymentFlow(appointmentId, patientId, doctorId, amount) {
             if (confirmData.success) {
                 showMessage('payment-message', `🎉 Payment successful! Appointment CONFIRMED.`, 'success');
                 payBtn.textContent = '✅ Paid';
+                // Open invoice automatically
+                setTimeout(() => window.open(`${PAYMENT_URL}/${initData.data._id}/invoice`, '_blank'), 1500);
             } else {
                 showMessage('payment-message', `❌ ${confirmData.message}`, 'error');
                 payBtn.disabled = false;
@@ -149,16 +154,45 @@ async function processPaymentFlow(appointmentId, patientId, doctorId, amount) {
     };
 
     payhere.onDismissed = function onDismissed() {
+        clearTimeout(fallbackWatcher);
         showMessage('payment-message', `Payment dismissed.`, 'info');
         payBtn.disabled = false;
         payBtn.textContent = '💰 Pay Now';
     };
 
     payhere.onError = function onError(error) {
+        clearTimeout(fallbackWatcher);
         showMessage('payment-message', `❌ PayHere Error: ${error}`, 'error');
         payBtn.disabled = false;
         payBtn.textContent = '💰 Pay Now';
     };
+
+    // ─── FALLBACK TIMEOUT (25 seconds) ───
+    fallbackWatcher = setTimeout(async () => {
+        if (payBtn.textContent !== '✅ Paid') {
+            showMessage('payment-message', `⏱ PayHere response delayed. Attempting safety confirmation to generate receipt...`, 'info');
+            try {
+                const confirmRes = await fetch(`${PAYMENT_URL}/confirm`, {
+                    method: 'POST',
+                    headers: AUTH_HEADERS,
+                    body: JSON.stringify({ orderId })
+                });
+                const confirmData = await confirmRes.json();
+                
+                if (confirmData.success || (confirmData.message && confirmData.message.includes("already confirmed"))) {
+                    showMessage('payment-message', `🎉 Payment captured via fallback! Appointment CONFIRMED.`, 'success');
+                    payBtn.textContent = '✅ Paid';
+                    setTimeout(() => window.open(`${PAYMENT_URL}/${initData.data._id}/invoice`, '_blank'), 1500);
+                } else {
+                    showMessage('payment-message', `⚠️ No payment signal received. Please check history later.`, 'warning');
+                    payBtn.disabled = false;
+                    payBtn.textContent = '💰 Check / Retry';
+                }
+            } catch(e) {
+                showMessage('payment-message', `❌ Fallback also failed to connect.`, 'error');
+            }
+        }
+    }, 25000);
 
     // Construct PayHere Object
     const payment = {

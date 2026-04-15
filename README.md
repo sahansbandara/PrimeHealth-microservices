@@ -29,6 +29,31 @@ PrimeHealth-microservices-main/
 │       └── prescription-service/# Port 5005
 ```
 
+## 🏗 Architecture
+
+```mermaid
+graph TD
+    UI[Frontend UI HTML/JS] -->|Book Appointment| AS[Appointment Svc :5003]
+    UI -->|Initiate Payment| PS[Payment Svc :5004]
+    UI -.->|PayHere Checkout| PH[PayHere Sandbox]
+    PH -.->|Webhook Notify| PS
+    PS -->|Confirm Appt Status| AS
+    
+    AS -->|Read/Write| MDBA[(Appointment MongoDB)]
+    PS -->|Read/Write| MDBP[(Payment MongoDB)]
+    
+    classDef client fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef service fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef db fill:#bfb,stroke:#333,stroke-width:2px;
+    classDef external fill:#fbb,stroke:#333,stroke-width:2px;
+    
+    class UI client;
+    class AS,PS service;
+    class MDBA,MDBP db;
+    class PH external;
+```
+
+
 ---
 
 ## 👥 Team & Module Ownership
